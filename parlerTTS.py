@@ -3,7 +3,7 @@
 # Requires: Internet = ON, Accelerator = GPU (T4), HF_TOKEN in Secrets,
 # and terms accepted at huggingface.co/ai4bharat/indic-parler-tts
 # ============================================================
-HF_TOKEN="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"
+HF_TOKEN=
 import importlib
 import importlib.util
 import os
