@@ -3,7 +3,7 @@
 # Requires: Internet = ON, Accelerator = GPU (T4), HF_TOKEN in Secrets,
 # and terms accepted at huggingface.co/ai4bharat/indic-parler-tts
 # ============================================================
-
+HF_TOKEN=
 import importlib
 import importlib.util
 import os
@@ -55,7 +55,7 @@ from IPython.display import Audio, display
 print(f"transformers {transformers.__version__} | torch {torch.__version__}")
 
 # --- auth ---
-token = os.environ.get("HF_TOKEN")
+token =HF_TOKEN
 if not token:
     try:
         from kaggle_secrets import UserSecretsClient
