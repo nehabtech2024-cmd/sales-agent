@@ -2,7 +2,6 @@
 # SCRIPT 2 — VOICE AGENT PIPELINE  (run top to bottom)
 #   Section 1: STT  — Canary-Qwen-2.5B  (ASR mode)
 #   Section 2: LLM  — Canary-Qwen-2.5B  (LLM mode, SAME model)
-#   Section 3: TTS  — Magpie-TTS-Multilingual-357M
 # ============================================================
 
 # ---- 0. Env flags BEFORE importing torch/nemo (must match Script 1) ----
@@ -19,30 +18,14 @@ from nemo.utils import logging as nemo_logging
 nemo_logging.setLevel(logging.ERROR)                      # quieter logs
 
 from nemo.collections.speechlm2.models import SALM        # Canary-Qwen
-from nemo.collections.tts.models import MagpieTTSModel     # Magpie TTS
-
-# ---- Hugging Face auth (Magpie is license-gated) ----
-# 1) Accept the license ONCE at:
-#    https://huggingface.co/nvidia/magpie_tts_multilingual_357m
-# 2) Add token as Kaggle Secret "HF_TOKEN" (Add-ons -> Secrets), or set env HF_TOKEN.
-try:
-    from kaggle_secrets import UserSecretsClient
-    _tok = UserSecretsClient().get_secret("HF_TOKEN")
-except Exception:
-    _tok = os.environ.get("HF_TOKEN", "")
-if _tok:
-    from huggingface_hub import login
-    login(token=_tok, add_to_git_credential=False)
 
 # ---- Device ----
-# The chain is SEQUENTIAL (STT -> LLM -> TTS), so both models share one T4
-# (~10 GB total, fits in 16 GB). Your 2nd T4 stays free. Splitting wouldn't
-# speed up a sequential chain, and one device avoids any placement errors.
+# Only one model is loaded now (Canary-Qwen), so a single T4 is plenty.
 DEVICE = "cuda:0" if torch.cuda.is_available() else "cpu"
-IN_SR, TTS_SR = 16000, 22050                              # Canary in / Magpie out
+IN_SR = 16000                                             # Canary input sample rate
 
 # ============================================================
-# LOAD MODELS ONCE (heavy) — kept resident for low latency
+# LOAD MODEL ONCE (heavy) — kept resident for low latency
 # ============================================================
 print("Loading Canary-Qwen-2.5B ...")
 t = time.time()
@@ -50,18 +33,6 @@ t = time.time()
 # math kernels (correct, just not the fastest path). For a speed experiment you
 # can try `.half()` instead of native, but test output for fp16 NaNs first.
 salm = SALM.from_pretrained("nvidia/canary-qwen-2.5b").to(DEVICE).eval()
-print(f"  loaded in {time.time()-t:.1f}s")
-
-print("Loading Magpie-TTS-Multilingual-357M ...")
-t = time.time()
-tts = MagpieTTSModel.from_pretrained("nvidia/magpie_tts_multilingual_357m")
-# --- Version-pinned fallback: use this if the line above ever errors on a
-#     NeMo/checkpoint mismatch (pins the checkpoint to match a pip-installed NeMo)
-# from huggingface_hub import hf_hub_download
-# _p = hf_hub_download("nvidia/magpie_tts_multilingual_357m",
-#                      "magpie_tts_multilingual_357m.nemo", revision="v2602")
-# tts = MagpieTTSModel.restore_from(_p)
-tts = tts.to(DEVICE).eval()
 print(f"  loaded in {time.time()-t:.1f}s")
 
 # ============================================================
@@ -124,4 +95,3 @@ def agent_reply(user_text):
 t = time.time()
 response_text = agent_reply(transcript)
 print(f"[LLM {time.time()-t:.2f}s]  Agent reply:\n  {response_text}\n")
-
