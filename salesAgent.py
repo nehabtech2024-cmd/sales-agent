@@ -32,7 +32,7 @@ VOICE_DESC, MAX_TURNS = CFG["VOICE_DESCRIPTION"], int(CFG["MAX_TURNS"])
 PUBLIC_URL = ""
 
 # --- Groq LLM config (add GROQ_API_KEY to agent_config.json, GROQ_MODEL optional) ---
-# GROQ_API_KEY = "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"
+
 GROQ_MODEL   = CFG.get("GROQ_MODEL", "llama-3.3-70b-versatile")
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 assert GROQ_API_KEY, "GROQ_API_KEY missing — add it to agent_config.json (or set env var)"
