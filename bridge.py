@@ -70,12 +70,119 @@ def set_pipe_size(fd: int, size: int):
         pass  # not permitted / not supported; defaults are fine
 
 
+class Stretcher:
+    """WSOLA: changes duration without changing pitch.
+
+    Speech gets stretched by `rate`; silence passes through untouched, and gets
+    compressed when the browser is running a backlog. That last part is what keeps
+    the call from drifting - the model still emits audio at exactly real time, so
+    the extra duration has to come out of the gaps between her sentences.
+
+    The analysis grid advances by exactly hop*rate regardless of where the
+    similarity search lands, so search offsets stay bounded perturbations instead
+    of accumulating into drift. The search is also biased toward the grid position,
+    which stops it locking onto a neighbouring pitch period.
+    """
+
+    def __init__(self, rate=1.0, win=1024, search=128, sr=SAMPLE_RATE):
+        self.rate = float(rate)
+        self.win = win
+        self.hop_s = win // 2
+        self.search = search
+        self.sr = sr
+        self.window = np.hanning(win).astype(np.float32)
+        # prefer offsets near the grid; sigma ~ half the search range
+        d = np.arange(-search, search + 1, dtype=np.float32)
+        self.bias = np.exp(-0.5 * (d / (search * 0.6)) ** 2)
+        self.buf = np.zeros(0, dtype=np.float32)
+        self.tail = np.zeros(self.hop_s, dtype=np.float32)
+        self.template = None
+        self.ideal = 0.0
+        self.in_n = 0
+        self.out_n = 0
+        self.silence_thresh = 0.005
+        self.backlog_cap = 1.5
+
+    def backlog(self):
+        return (self.out_n - self.in_n) / self.sr
+
+    def set_rate(self, rate):
+        self.rate = float(rate)
+
+    def _local_rate(self, frame):
+        speech = float(np.sqrt(np.mean(frame * frame))) > self.silence_thresh
+        b = self.backlog()
+        if speech:
+            r = self.rate
+            if b > self.backlog_cap:
+                r = min(1.0, self.rate + 0.15)
+            return r
+        return 3.0 if b > 0.25 else 1.0
+
+    def process(self, x):
+        x = np.asarray(x, dtype=np.float32)
+        if self.rate == 1.0 and self.backlog() <= 0.25:
+            self.in_n += len(x)
+            self.out_n += len(x)
+            return x
+
+        self.buf = np.concatenate([self.buf, x])
+        self.in_n += len(x)
+        L, Hs, S = self.win, self.hop_s, self.search
+        out = []
+
+        while True:
+            nominal = int(round(self.ideal))
+            if nominal + L + Hs + S >= len(self.buf):
+                break
+
+            # find the frame that continues most smoothly from what we just emitted
+            if self.template is None:
+                pos = nominal
+            else:
+                lo = max(0, nominal - S)
+                hi = min(len(self.buf) - L - Hs, nominal + S)
+                if hi <= lo:
+                    pos = nominal
+                else:
+                    region = self.buf[lo:hi + Hs]
+                    corr = np.correlate(region, self.template, "valid")
+                    energy = np.sqrt(np.convolve(region * region,
+                                                 np.ones(Hs, np.float32),
+                                                 "valid")) + 1e-6
+                    score = corr / energy
+                    b = self.bias[(lo - nominal + S):(hi - nominal + S + 1)]
+                    if len(b) == len(score):
+                        score = score * b
+                    pos = lo + int(np.argmax(score))
+
+            frame = self.buf[pos:pos + L] * self.window
+            frame[:Hs] += self.tail
+            out.append(frame[:Hs].copy())
+            self.tail = frame[Hs:].copy()
+            self.template = self.buf[pos + Hs:pos + 2 * Hs].copy()
+
+            # grid advances by the ideal amount, not by where the search landed
+            r = self._local_rate(self.buf[pos:pos + L])
+            self.ideal += Hs * r
+            self.out_n += Hs
+
+            if self.ideal > 4 * L:
+                drop = int(self.ideal) - 2 * L
+                self.buf = self.buf[drop:]
+                self.ideal -= drop
+
+        return np.concatenate(out) if out else np.zeros(0, dtype=np.float32)
+
+
 class Engine:
     """One personaplex process plus its two pipes."""
 
-    def __init__(self, binary: str, workdir: str, on_event):
+    def __init__(self, binary: str, workdir: str, on_event, rate: float = 1.0):
         self.binary = binary
         self.workdir = workdir
+        self.rate = float(rate)
+        self.stretch = Stretcher(self.rate)
         self.on_event = on_event          # called with dict, from the event loop
         self.proc = None
         self.in_fd = None                 # we write mic audio here
@@ -122,6 +229,7 @@ class Engine:
         self.out_bytes = 0
         self._fps_window = []
         self.in_buf = bytearray()
+        self.stretch = Stretcher(self.rate)
         self.started_at = time.monotonic()
 
         self.proc = await asyncio.create_subprocess_exec(
@@ -243,11 +351,20 @@ class Engine:
                 continue
             credit -= len(data)
             self.out_bytes += len(data)
+            # fps is measured on what the model produced, before any time-stretch
             self._fps_window.append((now, len(data)))
             cutoff = now - 3.0
             while self._fps_window and self._fps_window[0][0] < cutoff:
                 self._fps_window.pop(0)
-            await self._emit({"t": "audio", "pcm": f32_to_i16(data)})
+
+            pcm = self.stretch.process(np.frombuffer(data, dtype="<f4"))
+            if len(pcm):
+                await self._emit({"t": "audio", "pcm": f32_to_i16(pcm.tobytes())})
+
+    def set_rate(self, rate: float):
+        rate = max(0.5, min(1.5, float(rate)))
+        self.rate = rate
+        self.stretch.set_rate(rate)
 
     def fps(self) -> float:
         if len(self._fps_window) < 2:
@@ -291,10 +408,10 @@ class Engine:
 
 
 class Bridge:
-    def __init__(self, binary, workdir, ui_file):
+    def __init__(self, binary, workdir, ui_file, rate=1.0):
         self.ui_file = ui_file
         self.ws = None
-        self.engine = Engine(binary, workdir, self._on_event)
+        self.engine = Engine(binary, workdir, self._on_event, rate=rate)
 
     async def _on_event(self, msg):
         ws = self.ws
@@ -345,6 +462,8 @@ class Bridge:
     async def _command(self, cmd):
         kind = cmd.get("t")
         if kind == "start":
+            if "rate" in cmd:
+                self.engine.set_rate(cmd["rate"])
             await self.engine.start(
                 prompt=cmd.get("prompt", ""),
                 voice=cmd.get("voice", "NATF1"),
@@ -352,6 +471,10 @@ class Bridge:
                 context=cmd.get("ctx", 1500),
                 seed=cmd.get("seed"),
             )
+        elif kind == "rate":
+            self.engine.set_rate(cmd.get("v", 1.0))
+            await self._on_event({"t": "state", "state": self.engine.state,
+                                  "msg": f"Pace set to {self.engine.rate:.2f}x."})
         elif kind == "stop":
             await self.engine.stop()
             await self._on_event({"t": "state", "state": "idle", "msg": "Call ended."})
@@ -363,12 +486,13 @@ class Bridge:
                 "t": "stats",
                 "fps": round(self.engine.fps(), 2),
                 "state": self.engine.state,
+                "rate": round(self.engine.rate, 2),
                 "uptime": round(time.monotonic() - self.engine.started_at, 1)
                 if self.engine.started_at else 0,
             })
 
 
-async def selftest(binary, workdir, voice, prompt, seconds):
+async def selftest(binary, workdir, voice, prompt, seconds, rate=1.0):
     """Run the whole pipe rig without a browser: feed silence, see if audio comes back."""
     got = {"bytes": 0, "text": ""}
 
@@ -378,7 +502,7 @@ async def selftest(binary, workdir, voice, prompt, seconds):
         elif msg["t"] == "text":
             got["text"] += msg["v"]
 
-    eng = Engine(binary, workdir, sink)
+    eng = Engine(binary, workdir, sink, rate=rate)
     await eng.start(prompt, voice, 0.8, 1500)
 
     deadline = time.monotonic() + seconds
@@ -397,6 +521,7 @@ async def selftest(binary, workdir, voice, prompt, seconds):
     print("\n" + "=" * 62)
     print(f"audio returned : {got['bytes']} bytes  ({secs:.1f}s of speech)")
     print(f"frame rate     : {eng.fps():.2f} fps   (12.5 = real time)")
+    print(f"pace           : {rate:.2f}x")
     print(f"transcript     : {got['text'][:400] or '(nothing)'}")
     print("=" * 62)
     if got["bytes"] == 0:
@@ -419,14 +544,16 @@ def main():
                     help="seconds; run without a browser and report")
     ap.add_argument("--voice", default="NATF1")
     ap.add_argument("--prompt", default="")
+    ap.add_argument("--rate", type=float, default=1.0,
+                    help="speaking pace; 0.75 = three quarter speed, pitch unchanged")
     args = ap.parse_args()
 
     if args.selftest:
         asyncio.run(selftest(args.binary, args.workdir, args.voice,
-                             args.prompt, args.selftest))
+                             args.prompt, args.selftest, args.rate))
         return
 
-    bridge = Bridge(args.binary, args.workdir, args.ui)
+    bridge = Bridge(args.binary, args.workdir, args.ui, rate=args.rate)
     app = web.Application(client_max_size=8 * 1024 * 1024)
     app.add_routes([
         web.get("/", bridge.index),
