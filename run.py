@@ -59,6 +59,8 @@ def main():
                     help="seconds; run headless and report whether audio flows")
     ap.add_argument("--voice", default="NATF1")
     ap.add_argument("--prompt-file", default=None)
+    ap.add_argument("--rate", type=float, default=0.75,
+                    help="speaking pace; 0.75 = three quarter speed, pitch unchanged")
     args = ap.parse_args()
 
     bridge = locate("bridge.py")
@@ -88,7 +90,8 @@ def main():
            "--workdir", bindir,
            "--ui", str(ui),
            "--host", args.host,
-           "--port", str(args.port)]
+           "--port", str(args.port),
+           "--rate", str(args.rate)]
 
     if args.selftest:
         prompt = ""
