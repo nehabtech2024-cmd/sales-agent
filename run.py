@@ -2,8 +2,8 @@
 """
 run.py - start the voice agent.
 
-Finds the binary and weights that the notebook's setup cells put down, then hands off
-to the bridge.
+Finds the binary and weights that the notebook's setup cells put down, locates the app
+files wherever they happen to live in this repo, then hands off to the bridge.
 
     python run.py                  # serve the UI on :8998
     python run.py --selftest 25    # no browser: prove the audio pipes work
@@ -20,6 +20,25 @@ REPO = Path(__file__).resolve().parent
 RUNTIME = Path(os.environ.get("PPLEX_HOME", "/kaggle/temp/pplex-runtime"
                               if Path("/kaggle").exists()
                               else Path.home() / ".cache" / "pplex"))
+
+
+def locate(filename):
+    """Look in the usual spots, then anywhere in the repo. Layout shouldn't matter."""
+    for candidate in (REPO / "app" / filename, REPO / filename):
+        if candidate.is_file():
+            return candidate
+    hits = sorted(p for p in REPO.rglob(filename)
+                  if p.is_file() and ".git" not in p.parts)
+    return hits[0] if hits else None
+
+
+def inventory():
+    """Everything tracked in the repo, so a missing file is obvious at a glance."""
+    out = []
+    for p in sorted(REPO.rglob("*")):
+        if p.is_file() and ".git" not in p.parts and "__pycache__" not in p.parts:
+            out.append(str(p.relative_to(REPO)))
+    return out
 
 
 def find_binary():
@@ -39,26 +58,49 @@ def main():
     ap.add_argument("--selftest", type=float, default=0,
                     help="seconds; run headless and report whether audio flows")
     ap.add_argument("--voice", default="NATF1")
-    ap.add_argument("--prompt-file", default=str(REPO / "prompts" / "riya.txt"))
+    ap.add_argument("--prompt-file", default=None)
     args = ap.parse_args()
+
+    bridge = locate("bridge.py")
+    ui = locate("index.html")
+
+    if bridge is None or ui is None:
+        missing = [n for n, v in (("bridge.py", bridge), ("index.html", ui)) if v is None]
+        print(f"Can't find {' and '.join(missing)} anywhere under {REPO}\n")
+        files = inventory()
+        if files:
+            print("This repo contains:")
+            for f in files:
+                print("   ", f)
+        else:
+            print("This repo appears to be empty.")
+        sys.exit("\nPush the app files (bridge.py, index.html) and pull again.")
 
     ppx = find_binary()
     bindir = os.path.dirname(ppx)
+    print("bridge :", bridge)
+    print("ui     :", ui)
     print("binary :", ppx)
     print("weights:", bindir)
 
-    cmd = [sys.executable, "-u", str(REPO / "app" / "bridge.py"),
+    cmd = [sys.executable, "-u", str(bridge),
            "--binary", ppx,
            "--workdir", bindir,
-           "--ui", str(REPO / "app" / "index.html"),
+           "--ui", str(ui),
            "--host", args.host,
            "--port", str(args.port)]
 
     if args.selftest:
         prompt = ""
-        pf = Path(args.prompt_file)
-        if pf.exists():
-            prompt = pf.read_text().strip()
+        pf = Path(args.prompt_file) if args.prompt_file else None
+        if pf is None:
+            for name in ("riya.txt", "prompt.txt"):
+                pf = locate(name)
+                if pf:
+                    break
+        if pf and Path(pf).is_file():
+            prompt = Path(pf).read_text().strip()
+            print("prompt :", pf)
         cmd += ["--selftest", str(args.selftest), "--voice", args.voice,
                 "--prompt", prompt]
     else:
