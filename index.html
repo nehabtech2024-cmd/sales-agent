@@ -218,6 +218,11 @@ pre.log{margin:0;padding:12px 14px;max-height:190px;overflow:auto;font-family:va
           <input type="range" id="temp" min="0.4" max="1.0" step="0.05" value="0.8">
           <div class="hint">Lower sticks to the script. Higher improvises.</div>
         </div>
+        <div class="field">
+          <label for="rate">Speaking pace <span id="rateVal" style="color:var(--fg)">0.75x</span></label>
+          <input type="range" id="rate" min="0.6" max="1.0" step="0.05" value="0.75">
+          <div class="hint">Time-stretched after generation, so her pitch doesn't drop. Takes effect mid-call &mdash; no restart. The extra seconds come out of the pauses between her sentences.</div>
+        </div>
         <div class="hint">Changing any of these restarts the engine, which takes a few seconds and clears the conversation.</div>
       </div>
     </div>
@@ -329,6 +334,11 @@ function setLevel(which,f){
   $(which==="you"?"numYou":"numHer").textContent=db===-Infinity?"-\u221e":db.toFixed(0);
 }
 $("temp").addEventListener("input",e=>$("tempVal").textContent=(+e.target.value).toFixed(2));
+$("rate").addEventListener("input",e=>{
+  const v=+e.target.value;
+  $("rateVal").textContent=v.toFixed(2)+"x";
+  if(ws && ws.readyState===1) ws.send(JSON.stringify({t:"rate",v}));   // live, no restart
+});
 
 /* ---------- websocket ---------- */
 function connect(){
@@ -409,7 +419,8 @@ async function startCall(){
 
   ws.send(JSON.stringify({t:"start",
     prompt:$("prompt").value, voice:$("voice").value,
-    temp:parseFloat($("temp").value), ctx:parseInt($("ctx").value,10)}));
+    temp:parseFloat($("temp").value), ctx:parseInt($("ctx").value,10),
+    rate:parseFloat($("rate").value)}));
 
   $("voiceTag").textContent=$("voice").value;
   $("script").textContent=""; $("script").classList.remove("empty");
