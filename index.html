@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PersonaPlex line</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0E1216; --panel:#161C22; --panel2:#1B232A; --rule:#232C34;
+  --fg:#DCE4EB; --muted:#7A8895; --dim:#4C5964;
+  --you:#F2A63B; --her:#4EC9D4; --red:#E5484D; --ok:#5BC98B;
+  --disp:"Barlow Semi Condensed",-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;background:var(--bg);color:var(--fg);font-family:var(--disp);
+  font-size:16px;line-height:1.45;-webkit-font-smoothing:antialiased;
+}
+button,select,textarea,input{font-family:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--her);outline-offset:2px}
+
+.wrap{max-width:1180px;margin:0 auto;padding:22px 20px 60px}
+
+header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;
+  padding-bottom:14px;border-bottom:1px solid var(--rule);margin-bottom:22px}
+h1{font-size:26px;font-weight:600;letter-spacing:.02em;margin:0}
+.sub{font-family:var(--mono);font-size:11.5px;color:var(--muted);letter-spacing:.04em}
+
+.grid{display:grid;grid-template-columns:1fr 340px;gap:20px;align-items:start}
+@media(max-width:900px){.grid{grid-template-columns:1fr}}
+
+.panel{background:var(--panel);border:1px solid var(--rule);border-radius:4px}
+.panel+.panel{margin-top:16px}
+.phead{display:flex;justify-content:space-between;align-items:center;gap:10px;
+  padding:9px 14px;border-bottom:1px solid var(--rule)}
+.eyebrow{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--muted)}
+.pbody{padding:14px}
+
+/* ---- call ---- */
+.callbar{display:flex;align-items:center;gap:16px;padding:16px 14px}
+.calldot{width:9px;height:9px;border-radius:50%;background:var(--dim);flex:none}
+.calldot.live{background:var(--ok)}
+.calldot.warn{background:var(--you)}
+.calldot.bad{background:var(--red)}
+.statetext{flex:1;min-width:0}
+.statetext b{display:block;font-size:17px;font-weight:600}
+.statetext span{display:block;font-family:var(--mono);font-size:11.5px;color:var(--muted);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.btn{border:1px solid var(--rule);background:var(--panel2);color:var(--fg);
+  padding:10px 20px;border-radius:3px;font-size:15px;font-weight:600;letter-spacing:.03em;
+  cursor:pointer;white-space:nowrap}
+.btn:hover:not(:disabled){border-color:var(--muted)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.go{background:var(--her);border-color:var(--her);color:#07171A}
+.btn.end{background:transparent;border-color:var(--red);color:var(--red)}
+
+/* ---- transcript ---- */
+.script{padding:14px;min-height:230px;max-height:44vh;overflow-y:auto;
+  font-family:var(--mono);font-size:14px;line-height:1.75;color:var(--her);
+  white-space:pre-wrap;word-break:break-word}
+.script.empty{color:var(--dim);font-size:13px;line-height:1.6}
+.caret{display:inline-block;width:7px;height:15px;background:var(--her);
+  vertical-align:-2px;margin-left:1px}
+@media(prefers-reduced-motion:no-preference){
+  .live .caret{animation:blink 1.1s steps(1) infinite}
+  @keyframes blink{50%{opacity:0}}
+}
+
+/* ---- the meter: this is the point of the page ---- */
+.rate{padding:16px 14px 14px}
+.ratetop{display:flex;align-items:flex-end;gap:8px;margin-bottom:12px}
+.ratenum{font-family:var(--mono);font-size:42px;font-weight:600;line-height:.9;
+  letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.rateunit{font-family:var(--mono);font-size:11px;color:var(--muted);padding-bottom:4px}
+.ratenum.under{color:var(--red)}
+.ratenum.over{color:var(--ok)}
+.track{position:relative;height:10px;background:#0A0E11;border:1px solid var(--rule);
+  border-radius:2px;overflow:hidden}
+.fill{height:100%;width:0;background:var(--ok)}
+.fill.under{background:var(--red)}
+@media(prefers-reduced-motion:no-preference){.fill{transition:width .28s linear}}
+.redline{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--red);
+  left:83.33%}
+.scale{display:flex;justify-content:space-between;margin-top:6px;
+  font-family:var(--mono);font-size:10px;color:var(--dim)}
+.scale i{font-style:normal;color:var(--red)}
+.note{margin-top:11px;font-family:var(--mono);font-size:11px;color:var(--muted);
+  line-height:1.55}
+
+/* ---- levels ---- */
+.lvl{display:flex;align-items:center;gap:10px;padding:7px 14px}
+.lvl:first-of-type{padding-top:12px}
+.lvl:last-of-type{padding-bottom:14px}
+.lvlname{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;
+  text-transform:uppercase;width:52px;flex:none;color:var(--muted)}
+.lvlbar{flex:1;height:6px;background:#0A0E11;border:1px solid var(--rule);border-radius:2px;
+  overflow:hidden}
+.lvlfill{height:100%;width:0}
+.lvlfill.you{background:var(--you)}
+.lvlfill.her{background:var(--her)}
+.lvlnum{font-family:var(--mono);font-size:10.5px;color:var(--dim);width:34px;
+  text-align:right;flex:none;font-variant-numeric:tabular-nums}
+
+/* ---- controls ---- */
+.field{margin-bottom:14px}
+.field:last-child{margin-bottom:0}
+label{display:block;font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+textarea,select,input[type=number]{width:100%;background:#0A0E11;color:var(--fg);
+  border:1px solid var(--rule);border-radius:3px;padding:9px 10px;font-size:14px}
+textarea{font-family:var(--mono);font-size:12.5px;line-height:1.6;resize:vertical;min-height:150px}
+.row{display:flex;gap:10px}
+.row>*{flex:1;min-width:0}
+input[type=range]{width:100%;accent-color:var(--her)}
+.hint{font-family:var(--mono);font-size:10.5px;color:var(--dim);margin-top:5px;line-height:1.5}
+
+/* ---- log ---- */
+details summary{cursor:pointer;padding:9px 14px;font-family:var(--mono);font-size:10.5px;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+details[open] summary{border-bottom:1px solid var(--rule)}
+pre.log{margin:0;padding:12px 14px;max-height:190px;overflow:auto;font-family:var(--mono);
+  font-size:11px;line-height:1.6;color:var(--muted);white-space:pre-wrap;word-break:break-all}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>PersonaPlex line</h1>
+  <div class="sub" id="rig">personaplex-7b q4_k &middot; mimi 24 kHz &middot; full duplex</div>
+</header>
+
+<div class="grid">
+
+  <!-- left: the call -->
+  <div>
+    <div class="panel">
+      <div class="callbar">
+        <div class="calldot" id="dot"></div>
+        <div class="statetext">
+          <b id="stateName">Not connected</b>
+          <span id="stateMsg">Opening the line&hellip;</span>
+        </div>
+        <button class="btn go" id="callBtn" disabled>Start call</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="phead">
+        <span class="eyebrow">Agent transcript</span>
+        <span class="eyebrow" id="voiceTag">&mdash;</span>
+      </div>
+      <div class="script empty" id="script">Nothing said yet. Start the call, put headphones on, and say hello. Only the agent's speech is transcribed &mdash; the model doesn't write down your side.</div>
+    </div>
+
+    <div class="panel">
+      <details>
+        <summary>Engine log</summary>
+        <pre class="log" id="log">waiting for the bridge</pre>
+      </details>
+    </div>
+  </div>
+
+  <!-- right: the rig -->
+  <div>
+    <div class="panel">
+      <div class="phead"><span class="eyebrow">Frame rate</span><span class="eyebrow" id="upt">&mdash;</span></div>
+      <div class="rate">
+        <div class="ratetop">
+          <div class="ratenum" id="fps">0.0</div>
+          <div class="rateunit">fps</div>
+        </div>
+        <div class="track">
+          <div class="fill" id="fill"></div>
+          <div class="redline" title="12.5 fps = real time"></div>
+        </div>
+        <div class="scale"><span>0</span><i>12.5 real time</i><span>15</span></div>
+        <div class="note" id="rateNote">Frames a second arriving from the engine. The bridge never forwards faster than real time, so 12.5 is the ceiling &mdash; falling short of the red mark means the model can't keep up.</div>
+      </div>
+      <div class="lvl">
+        <div class="lvlname">You</div>
+        <div class="lvlbar"><div class="lvlfill you" id="lvlYou"></div></div>
+        <div class="lvlnum" id="numYou">&minus;&infin;</div>
+      </div>
+      <div class="lvl">
+        <div class="lvlname">Agent</div>
+        <div class="lvlbar"><div class="lvlfill her" id="lvlHer"></div></div>
+        <div class="lvlnum" id="numHer">&minus;&infin;</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="phead"><span class="eyebrow">Persona</span></div>
+      <div class="pbody">
+        <div class="field">
+          <label for="prompt">System prompt</label>
+          <textarea id="prompt" spellcheck="false"></textarea>
+          <div class="hint">The model was tuned on "You work for {company} which is a {industry} and your name is {name}. Information: &hellip;". Keep the facts short; long ones dilute the role.</div>
+        </div>
+        <div class="row field">
+          <div>
+            <label for="voice">Voice</label>
+            <select id="voice"></select>
+          </div>
+          <div>
+            <label for="ctx">Context</label>
+            <input type="number" id="ctx" value="1500" min="400" max="3000" step="100">
+          </div>
+        </div>
+        <div class="field">
+          <label for="temp">Temperature <span id="tempVal" style="color:var(--fg)">0.80</span></label>
+          <input type="range" id="temp" min="0.4" max="1.0" step="0.05" value="0.8">
+          <div class="hint">Lower sticks to the script. Higher improvises.</div>
+        </div>
+        <div class="hint">Changing any of these restarts the engine, which takes a few seconds and clears the conversation.</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<script>
+const SR = 24000, CHUNK = 960;               // 40 ms of mic audio per websocket frame
+const $ = id => document.getElementById(id);
+
+// Everything is addressed relative to this page's directory, so the same build works
+// at the server root and behind a path prefix like code-server's /proxy/8998/.
+const BASE = location.pathname.replace(/[^\/]*$/, "");
+
+const DEFAULT_PROMPT =
+"You work for Piyush Academy which is an online education institute and your name is Riya. " +
+"Information: Three courses are available: Basic Computer Course for four thousand rupees over two months, " +
+"Tally with GST for seven thousand rupees over three months, and Full Stack Web Development for " +
+"twenty five thousand rupees over six months. Classes are live online and recordings are provided. " +
+"A free demo class is available before you enroll. Twenty percent off if you join this month. " +
+"Ask the caller what they want to learn and how much time they can give each day, then recommend one " +
+"course and offer to book the free demo class.";
+
+$("prompt").value = DEFAULT_PROMPT;
+
+/* ---------- worklets ---------- */
+const CAP_SRC = `
+class Cap extends AudioWorkletProcessor{
+  constructor(){super();this.n=0;this.buf=new Float32Array(${CHUNK});}
+  process(inp){
+    const ch=inp[0] && inp[0][0]; if(!ch) return true;
+    for(let i=0;i<ch.length;i++){
+      this.buf[this.n++]=ch[i];
+      if(this.n===this.buf.length){this.port.postMessage(this.buf.slice());this.n=0;}
+    }
+    return true;
+  }
+}
+registerProcessor('cap',Cap);`;
+
+const PLAY_SRC = `
+class Play extends AudioWorkletProcessor{
+  constructor(){super();this.q=[];this.cur=null;this.pos=0;this.tick=0;
+    this.port.onmessage=e=>{ if(e.data==='flush'){this.q=[];this.cur=null;this.pos=0;}
+                             else this.q.push(e.data); };}
+  process(_,out){
+    const o=out[0][0]; let i=0;
+    while(i<o.length){
+      if(!this.cur){ this.cur=this.q.shift()||null; this.pos=0; }
+      if(!this.cur){ while(i<o.length) o[i++]=0; break; }
+      const n=Math.min(o.length-i,this.cur.length-this.pos);
+      o.set(this.cur.subarray(this.pos,this.pos+n),i);
+      i+=n; this.pos+=n;
+      if(this.pos>=this.cur.length) this.cur=null;
+    }
+    if((this.tick++ % 16)===0) this.port.postMessage(this.q.length);
+    return true;
+  }
+}
+registerProcessor('play',Play);`;
+
+const blobURL = src => URL.createObjectURL(new Blob([src],{type:"application/javascript"}));
+
+/* ---------- resampling, for browsers that won't give us 24 kHz ---------- */
+function resample(x, from, to){
+  if(from === to) return x;
+  const ratio = from/to, n = Math.round(x.length/ratio), y = new Float32Array(n);
+  for(let i=0;i<n;i++){
+    const p = i*ratio, i0 = p|0, f = p-i0;
+    y[i] = x[i0]*(1-f) + (x[Math.min(i0+1,x.length-1)]||0)*f;
+  }
+  return y;
+}
+const toI16 = f => { const a=new Int16Array(f.length);
+  for(let i=0;i<f.length;i++){const v=Math.max(-1,Math.min(1,f[i]));a[i]=v*32767;} return a; };
+const toF32 = a => { const f=new Float32Array(a.length);
+  for(let i=0;i<a.length;i++) f[i]=a[i]/32768; return f; };
+const peakDb = f => { let p=0; for(let i=0;i<f.length;i++){const v=Math.abs(f[i]); if(v>p)p=v;}
+  return p<1e-5 ? -Infinity : 20*Math.log10(p); };
+
+/* ---------- state ---------- */
+let ws=null, ctx=null, capNode=null, playNode=null, micStream=null, inCall=false;
+let voices=["NATF1"];
+
+/* ---------- ui plumbing ---------- */
+function setState(name,msg,cls){
+  $("stateName").textContent=name;
+  $("stateMsg").textContent=msg||"";
+  $("dot").className="calldot"+(cls?" "+cls:"");
+}
+function appendLog(t){
+  const el=$("log");
+  if(el.textContent==="waiting for the bridge") el.textContent="";
+  el.textContent=(el.textContent+t).slice(-6000);
+  el.scrollTop=el.scrollHeight;
+}
+function appendText(t){
+  const el=$("script");
+  if(el.classList.contains("empty")){el.classList.remove("empty");el.textContent="";}
+  el.textContent+=t;
+  el.scrollTop=el.scrollHeight;
+}
+function setLevel(which,f){
+  const db=peakDb(f);
+  const pct=db===-Infinity?0:Math.max(0,Math.min(100,(db+50)/50*100));
+  $(which==="you"?"lvlYou":"lvlHer").style.width=pct+"%";
+  $(which==="you"?"numYou":"numHer").textContent=db===-Infinity?"-\u221e":db.toFixed(0);
+}
+$("temp").addEventListener("input",e=>$("tempVal").textContent=(+e.target.value).toFixed(2));
+
+/* ---------- websocket ---------- */
+function connect(){
+  const proto = location.protocol==="https:" ? "wss" : "ws";
+  ws = new WebSocket(`${proto}://${location.host}${BASE}ws`);
+  ws.binaryType="arraybuffer";
+
+  ws.onopen = ()=>{ $("callBtn").disabled=false; setState("Line open","Press start when you're ready."); };
+  ws.onclose = ()=>{ $("callBtn").disabled=true; setState("Line dropped","The notebook cell may have stopped. Reload after restarting it.","bad"); endCall(true); };
+  ws.onerror = ()=> setState("Connection error","Check that the bridge cell is still running.","bad");
+
+  ws.onmessage = ev => {
+    if(typeof ev.data !== "string"){
+      const f = toF32(new Int16Array(ev.data));
+      setLevel("her", f);
+      if(playNode) playNode.port.postMessage(resample(f, SR, ctx.sampleRate));
+      return;
+    }
+    const m = JSON.parse(ev.data);
+    if(m.t==="text")  appendText(m.v);
+    else if(m.t==="log") appendLog(m.v);
+    else if(m.t==="stats") updateStats(m);
+    else if(m.t==="state"){
+      const map={idle:["Line open",""],starting:["Connecting","warn"],ready:["On call","live"],
+                 stopped:["Engine stopped","bad"],busy:["Line busy","bad"]};
+      const [nm,cls]=map[m.state]||["",""];
+      setState(nm,m.msg,cls);
+      $("script").classList.toggle("live", m.state==="ready");
+      if(m.state==="stopped"||m.state==="busy") endCall(true);
+    }
+  };
+}
+
+function updateStats(m){
+  const f=m.fps||0;
+  $("fps").textContent=f.toFixed(1);
+  const under = f>0 && f<12.2;
+  $("fps").className="ratenum"+(f===0?"":under?" under":" over");
+  $("fill").className="fill"+(under?" under":"");
+  $("fill").style.width=Math.min(100,f/15*100)+"%";
+  $("upt").textContent=m.uptime?`up ${m.uptime.toFixed(0)}s`:"\u2014";
+  if(f>0) $("rateNote").textContent = under
+    ? `Running ${(12.5-f).toFixed(1)} fps under real time. Replies lag and some of your speech gets dropped.`
+    : "Keeping up with the clock.";
+}
+
+/* ---------- the call ---------- */
+async function startCall(){
+  $("callBtn").disabled=true;
+  try{
+    micStream = await navigator.mediaDevices.getUserMedia({audio:{
+      channelCount:1, echoCancellation:true, noiseSuppression:true, autoGainControl:true
+    }});
+  }catch(e){
+    setState("No microphone","Allow mic access in the browser, then press start again.","bad");
+    $("callBtn").disabled=false; return;
+  }
+
+  ctx = new (window.AudioContext||window.webkitAudioContext)({sampleRate:SR, latencyHint:"interactive"});
+  await ctx.resume();
+  await ctx.audioWorklet.addModule(blobURL(CAP_SRC));
+  await ctx.audioWorklet.addModule(blobURL(PLAY_SRC));
+
+  if(Math.abs(ctx.sampleRate-SR)>1)
+    appendLog(`\n[ui] browser gave ${ctx.sampleRate} Hz, resampling to 24000\n`);
+
+  const src = ctx.createMediaStreamSource(micStream);
+  capNode = new AudioWorkletNode(ctx,"cap",{numberOfInputs:1,numberOfOutputs:0});
+  capNode.port.onmessage = e => {
+    const f = resample(e.data, ctx.sampleRate, SR);
+    setLevel("you", f);
+    if(ws && ws.readyState===1) ws.send(toI16(f).buffer);
+  };
+  src.connect(capNode);
+
+  playNode = new AudioWorkletNode(ctx,"play",{numberOfInputs:0,numberOfOutputs:1,outputChannelCount:[1]});
+  playNode.connect(ctx.destination);
+
+  ws.send(JSON.stringify({t:"start",
+    prompt:$("prompt").value, voice:$("voice").value,
+    temp:parseFloat($("temp").value), ctx:parseInt($("ctx").value,10)}));
+
+  $("voiceTag").textContent=$("voice").value;
+  $("script").textContent=""; $("script").classList.remove("empty");
+  inCall=true;
+  $("callBtn").textContent="End call"; $("callBtn").className="btn end"; $("callBtn").disabled=false;
+}
+
+function endCall(silent){
+  inCall=false;
+  if(!silent && ws && ws.readyState===1) ws.send(JSON.stringify({t:"stop"}));
+  if(playNode){ playNode.port.postMessage("flush"); playNode.disconnect(); playNode=null; }
+  if(capNode){ capNode.disconnect(); capNode=null; }
+  if(micStream){ micStream.getTracks().forEach(t=>t.stop()); micStream=null; }
+  if(ctx){ ctx.close(); ctx=null; }
+  $("callBtn").textContent="Start call"; $("callBtn").className="btn go";
+  $("callBtn").disabled = !(ws && ws.readyState===1);
+  setLevel("you",new Float32Array(1)); setLevel("her",new Float32Array(1));
+}
+
+$("callBtn").addEventListener("click",()=> inCall ? endCall(false) : startCall());
+
+/* ---------- boot ---------- */
+fetch(BASE + "api/config").then(r=>r.json()).then(c=>{
+  voices=c.voices;
+  $("voice").innerHTML=voices.map(v=>`<option${v==="NATF1"?" selected":""}>${v}</option>`).join("");
+}).catch(()=>{ $("voice").innerHTML='<option>NATF1</option>'; });
+
+connect();
+</script>
+</body>
+</html>

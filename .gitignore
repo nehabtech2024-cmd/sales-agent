@@ -1,0 +1,15 @@
+# Runtime artifacts live outside the repo, but never commit them by accident.
+*.gguf
+*.safetensors
+personaplex
+moshi-bin-*/
+_pipes/
+*.log
+*.pcm
+*.raw
+
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.vscode/
+.DS_Store
